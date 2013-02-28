@@ -1,0 +1,1 @@
+This PHP script generates an SVG graph of [Bitcoins](http://www.weusecoins.com/), starting from a given [transaction](https://en.bitcoin.it/wiki/Transaction) and working backwards, using the [Blockchain.info JSON API](http://blockchain.info/api/).
