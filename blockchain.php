@@ -112,6 +112,7 @@ class btc_txn {
 		$svg .= 'path.input { fill:#AFA; stroke:#3F3; stroke-width:1px; opacity:0.6; }';
 		$svg .= 'path.output { fill:#FAA; stroke:#F33; stroke-width:1px; opacity:0.6; }';
 		$svg .= 'path.fee { fill:#AAA; stroke:#333; stroke-width:1px; }';
+		$svg .= 'path.line { fill:transparent; }';
 		$svg .= 'path.unspent { opacity:0.4; mask:url(#fade_right_svg_mask); }';
 		$svg .= ']]></style></defs>';
 		$svg .= '<linearGradient id="fade_right_svg_gradient" gradientUnits="objectBoundingBox" x2="1" y2="0">';
@@ -301,6 +302,12 @@ class btc_txn {
 		return $total_height-$this->gap_size;
 	}
 	
+	private function _drawCurve(Point $p1, Point $p2) {
+		$handle_size = ($p2->x - $p1->x)*0.4;
+		return 'M'.$p1->x.' '.$p1->y.
+		  'C'.($p1->x+$handle_size).' '.$p1->y.' '.($p2->x-$handle_size).' '.$p2->y.' '.$p2->x.' '.$p2->y;
+	}
+	
 	private function _drawFlow(Point $p1, $h1, Point $p2, $h2) {
 		$handle_size = ($p2->x - $p1->x)*0.4;
 		return 'M'.$p1->x.' '.$p1->y.
@@ -345,13 +352,22 @@ class btc_txn {
 		
 		$paths = array();
 		$last_tx_spent = true;
+		$last_line_height = 0;
 		foreach($txn->out as $out) {
 			$real_height = $out->value*$txn_ratio; // What fraction of the transaction's height is this output?
 			if ($prune && $out->spent == false) {
 				// Show minimal display
-				$visual_height = $out->value*$this->ratio; // What fraction of the transaction's height is this output?
+				$visual_height = $out->value*$this->ratio; // What is the real height of this flow?
 				if ($last_tx_spent == false) $cur_addr->y -= $this->gap_size; // Shrink up if prior was unspent too
-				$paths[] = '<path class="output unspent" d="'.$this->_drawFlow($cur_tx, $real_height, $cur_addr, $visual_height).'" />';
+				if ($visual_height <= 1 && $real_height <= 1) {
+					// Flow is less than a pixel tall
+					if ($cur_addr->y - $last_line_height >= 0.8) { // Only draw if we've shifted down enough to be seen
+						$paths[] = '<path class="output unspent line" d="'.$this->_drawCurve($cur_tx, $cur_addr).'" />';
+						$last_line_height = $cur_addr->y;
+					}
+				} else {
+					$paths[] = '<path class="output unspent" d="'.$this->_drawFlow($cur_tx, $real_height, $cur_addr, $visual_height).'" />';
+				}
 				
 				$cur_addr->y += $visual_height + $this->gap_size;
 				$cur_tx->y += $real_height;
