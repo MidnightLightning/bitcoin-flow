@@ -54,7 +54,6 @@ class btc_txn {
 	public $tx_gap_size = 20; // Vertical gap between transactions in a generation
 	
 	function __construct($txn_id, $generations) {
-		$start = microtime();
 		while (count($this->txn_tree) < $generations) {
 			$this->txn_tree[] = array();
 		}
@@ -86,12 +85,9 @@ class btc_txn {
 				}
 			}
 		}
-		$delta = microtime() - $start;
-		echo "Construction took {$delta}<br />";
 	}
 	
 	function toSVG() {
-		$start = microtime();
 		// Calculate max value
 		$max = 0;
 		foreach($this->txns as $tx) {
@@ -204,8 +200,6 @@ class btc_txn {
 		}
 		
 		$svg .= '</svg>';
-		$delta = microtime() - $start;
-		echo "SVG Parsing took {$delta}<br />";
 		return $svg;
 	}
 	
