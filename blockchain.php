@@ -24,13 +24,13 @@ echo "</pre>";
 ?>
 <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
 <script>
-$(document).load(function() {
+$(document).ready(function() {
 	console.log("Init!");
 	$('#grab-svg').click(function(e) {
 		console.log("Grabbing!");
 		var svg = $('#svg-box').html();
 		console.log(svg);
-		window.open('data:img/svg+xml,'+encodeURIComponent(svg));
+		window.open('data:image/svg+xml,'+encodeURIComponent(svg));
 	});
 });
 </script>
@@ -102,7 +102,7 @@ class btc_txn {
 		$svg .= 'rect.transaction { fill:#C0C0F0; }';
 		$svg .= 'rect.transaction.coinbase { fill:#cea8db; }';
 		$svg .= 'rect.txn_bb { opacity: 0; }';
-		$svg .= 'text { font-size:12px; }';
+		$svg .= 'text { font-size:12px; font-family:"Gil Sans",sans-serif; }';
 		$svg .= 'tspan.field-label { font-weight:bold; }';
 		$svg .= 'tspan.address { font-size:10px; font-family:monospace; }';
 		$svg .= 'path.input { fill:#AFA; stroke:#3F3; stroke-width:1px; opacity:0.6; }';
