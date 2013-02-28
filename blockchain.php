@@ -7,6 +7,15 @@
 // Transaction 56288626 is both parent (56288626[1]) and grandparent (56288626[0] => [0]56288641) of 56619498		?txn=56619498&g=3&prune
 // Both parents of 56151204 pull from grandparent 56150957 (56150957[0] => 56151185[0], 56150957[1] => 56151072[0])		?txn=56151204&g=3&prune
 // Transaction 55240899 is a grandchild of a coinbase transaction (54910748), and therefore the tapering of the graph goes the other way		?txn=55240899&g=3&prune
+// Transaction 57326023 and its ancestors are a good example of multiple inputs coming from one prior transaction:
+//    Three of transaction 57326023's inputs came from transaction 57315077, which pulled three outputs from 57303263.
+//    Both of transaction 57303591's outputs make their way into 57326023 (one via 57306406 and one via 57315077)
+
+// @TODO: when pruning outputs, don't prune outputs that go to an address that is unpruned somewhere else
+// @TODO: allow whitelisting addresses to never get pruned
+// @TODO: allow pruning just transaction fee displays
+// @TODO: identify "change" outputs (outputs going to an address that is among the inputs of the transaction) and draw them differently. Will probably require sorting those to the top or bottom of the list of outputs.
+// @TODO: Add javascript interaction such that rolling over an address box highlights other instances of the same address on the image.
 
 $main_txn = (isset($_GET['txn']))? intval($_GET['txn']) : '56619498';
 $generations = (isset($_GET['g']))? intval($_GET['g']) : 3;
