@@ -11,121 +11,129 @@ $txn = $transactions[1];
 */
 
 if (isset($_GET['txn'])) {
-	$main_txn = $_GET['txn'];
+	$main_txn = intval($_GET['txn']);
 } else {
 	$main_txn = 'bf2cd6af459f147844f1b9443998ed818bdbff3305abe4e3933d9539c8e53291';
 }
 
 // Cache all transactions needed for this plot
 $txns = array();
-$txns[$main_txn] = jsonGet('http://blockchain.info/rawtx/'.$main_txn);
-$grand_total = 0;
-$max_total = 0;
+getTxn($main_txn);
 foreach($txns[$main_txn]->inputs as $in) {
-	$grand_total += $in->prev_out->value;
-	$id = $in->prev_out->tx_index;
-	if (!isset($txns[$id])) {
-		$txns[$id] = jsonGet('http://blockchain.info/rawtx/'.$id);
-		$total = 0;
-		foreach($txns[$id]->inputs as $sub_in) {
-			$total += $sub_in->prev_out->value;
-		}
-		$txns[$id]->value = $total;
-		if ($total > $max_total) $max_total = $total;
+	$child_id = $in->prev_out->tx_index;
+	getTxn($child_id);
+	foreach($txns[$child_id]->inputs as $sub) {
+		getTxn($sub->prev_out->tx_index);
 	}
 }
-$txns[$main_txn]->value = $grand_total;
-if ($grand_total > $max_total) $max_total = $grand_total;
+$max_total = 0;
+foreach($txns as $tx) {
+	if ($tx->value > $max_total) $max_total = $tx->value;
+}
 
-$max_tx_width = 500;
-$box_height = 35;
+$max_tx_height = 300;
 $handle_size = 20;
-$ratio = $max_tx_width/$max_total; // pixels per satoshi
+$ratio = $max_tx_height/$max_total; // pixels per satoshi
 
-$main_tx_width = $txns[$main_txn]->value*$ratio;
-if ($main_tx_width < 140) $main_tx_width = 140;
+$txn_box_width = 140;
+$addr_box_width = 225;
+$min_box_height = 35;
+$gutter_width = 40; // Horizontal space between transaction box and address boxes
+$gap_size = 10; // Vertical gap between address boxes
 
-$svg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1400" height="600">';
+$address_boxes = array(); // Global list of where Address boxes are, to connect them later
+$txn_boxes = array();
+
+$tree = array();
+$tree[0] = array($main_txn); // Main transaction
+$tree[1] = array(); // Children
+$tree[2] = array(); // Grandchildren
+foreach($txns[$main_txn]->inputs as $in) {
+	$tree[1][] = $in->prev_out->tx_index;
+	foreach($txns[$in->prev_out->tx_index]->inputs as $sub) {
+		$tree[2][] = $sub->prev_out->tx_index;
+	}
+}
+$tree[1] = array_unique($tree[1]);
+$tree[2] = array_unique($tree[2]);
+
+//var_dump($tree);
+
+// Calculate total height
+$max_height = 0;
+$col1_height = 0;
+foreach($tree[2] as $id) {
+	$col1_height += txnHeight($id)+20;
+}
+$col1_height -= 20;
+if ($col1_height > $max_height) $max_height = $col1_height;
+
+$col2_height = 0;
+foreach($tree[1] as $id) {
+	$col2_height += txnHeight($id)+20;
+}
+$col2_height -= 20;
+if ($col2_height > $max_height) $max_height = $col2_height;
+
+$height = txnHeight($tree[0][0]);
+if ($height > $max_height) $max_height = $height;
+
+$total_width = ($txn_box_width+$gutter_width+$addr_box_width+50)*3-50+10;
+
+$svg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="'.$total_width.'" height="'.($max_height+10).'">';
 $svg .= '<defs><style type="text/css"><![CDATA[';
 $svg .= 'rect { fill:#E0E0E0; stroke:#333; stroke-width:2px; }';
-$svg .= 'rect.address { fill:#F0F0E0; }';
+$svg .= 'rect.address { fill:#F0F0E0; stroke:#660; }';
 $svg .= 'rect.transaction { fill:#C0C0F0; }';
+$svg .= 'rect.txn_bb { opacity: 0; }';
 $svg .= 'text { font-size:12px; }';
-$svg .= 'path.input { fill:#CFC; stroke:#9F9; stroke-width:1px; opacity:0.6; }';
-$svg .= 'path.output { fill:#FCC; stroke:#F99; stroke-width:1px; opacity:0.6; }';
+$svg .= 'tspan.field-label { font-weight:bold; }';
+$svg .= 'tspan.address { font-size:10px; font-family:monospace; }';
+$svg .= 'path.input { fill:#AFA; stroke:#3F3; stroke-width:1px; opacity:0.6; }';
+$svg .= 'path.output { fill:#FAA; stroke:#F33; stroke-width:1px; opacity:0.6; }';
 $svg .= ']]></style></defs>';
 
-// Draw all OUTPUTs
-$out_offset = 10;
-$tx_offset = 10;
-$tx_fee = $txns[$main_txn]->value;
-foreach($txns[$main_txn]->out as $out) {
-	$real_width = $out->value*$ratio;
-	$width = ($real_width<140)? 140 : $real_width;
 
-	$svg .= '<path class="output" d="'.drawFlow($out_offset, 10+$box_height, $width, $tx_offset, 100, $real_width).'" />';
-	$svg .= '<rect class="address" x="'.$out_offset.'" y="10" width="'.$width.'" height="'.$box_height.'" />';
-	$svg .= '<text x="'.($out_offset+5).'" y="25"><tspan>Value: '.btcFormat($out->value).'</tspan><tspan x="'.($out_offset+5).'" dy="1.2em">Address: '.truncateAddress($out->addr).'</tspan></text>';
-	$out_offset += $width+20;
-	$tx_offset += $real_width;
-	$tx_fee -= $out->value;
-}
-if ($tx_fee > 0) { // Draw the miner's fee
-	$real_width = $tx_fee*$ratio;
-	$width = ($real_width<140)? 140 : $real_width;
-	
-	$svg .= '<path class="output" d="'.drawFlow($out_offset, 10+$box_height, $width, $tx_offset, 100, $real_width).'" />';
-	$svg .= '<rect x="'.$out_offset.'" y="10" width="'.$width.'" height="'.$box_height.'" />';
-	$svg .= '<text x="'.($out_offset+5).'" y="25"><tspan>Miner Fee: '.btcFormat($tx_fee).'</tspan></text>';	
+$cur_y = ($max_height-$col1_height)/2+5;
+$cur_x = 5;
+foreach($tree[2] as $id) {
+	$rs = drawTxn($cur_x, $cur_y, $id);
+	$svg .= $rs['svg'];
+	$cur_y += $rs['height']+20;
 }
 
-// Draw all INPUTs
-$in_offset = 10;
-$tx_offset = 10;
-foreach($txns[$main_txn]->inputs as $in) {
-	// Get prior transaction
-	$prior = $txns[$in->prev_out->tx_index];
-	
-	// Calculate what will be the total width of the outputs of this transaction
-	$total_width = 0;
-	foreach($prior->out as $out) {
-		$width = $out->value*$ratio;
-		if ($width < 140) $width = 140;
-		$total_width += $width+20;
-	}
-	
-	$prior_width = $prior->value*$ratio;
-	if ($prior_width<140) $prior_width = 140;
-	$prior_offset = $in_offset+($total_width-$prior_width)/2;
-	$prior_tx_offset = $prior_offset;
-	
-	foreach($prior->out as $out) {
-		$real_width = $out->value*$ratio;
-		$width = ($real_width<140)? 140 : $real_width;
-		
-		$vert_offset = 200;
-		if ($out->addr == $in->prev_out->addr) {
-			$svg .= '<path class="input" d="'.drawFlow($tx_offset, 100+$box_height, $real_width, $in_offset, $vert_offset, $width).'" />';
-			$tx_offset += $real_width;
-		}
-		// Draw connecting output to prior transaction
-		$svg .= '<path class="output" d="'.drawFlow($in_offset, $vert_offset+$box_height, $width, $prior_tx_offset, 300, $real_width).'" />';
-		$prior_tx_offset += $real_width;
-		
-		$svg .= '<rect class="address" x="'.$in_offset.'" y="'.$vert_offset.'" width="'.$width.'" height="'.$box_height.'" />';
-		$svg .= '<text x="'.($in_offset+5).'" y="'.($vert_offset+15).'"><tspan>Value: '.btcFormat($out->value).'</tspan><tspan x="'.($in_offset+5).'" dy="1.2em">Address: '.truncateAddress($out->addr).'</tspan></text>';
-		
-		$in_offset += $width+20;
-	}
-	$svg .= '<a xlink:href="?txn='.$prior->tx_index.'" target="_top"><rect class="transaction" x="'.$prior_offset.'" y="300" width="'.$prior_width.'" height="'.$box_height.'" />';
-	$svg .= '<text x="'.($prior_offset+5).'" y="315"><tspan>Transaction: '.$prior->tx_index.'</tspan><tspan x="'.($prior_offset+5).'" dy="1.2em">Value: '.btcFormat($prior->value).'</tspan></text></a>';
-	
+$cur_x += $rs['width']+50;
+$cur_y = ($max_height-$col2_height)/2+5;
+foreach($tree[1] as $id) {
+	$rs = drawTxn($cur_x, $cur_y, $id);
+	$svg .= $rs['svg'];
+	$cur_y += $rs['height']+20;
 }
 
 
-$svg .= '<a xlink:href="http://blockchain.info/tx-index/'.$main_txn.'" target="_blank"><rect class="transaction" x="10" y="100" width="'.$main_tx_width.'" height="'.$box_height.'" />';
-$svg .= '<text x="15" y="115"><tspan>Transaction: '.$txns[$main_txn]->tx_index.'</tspan><tspan x="15" dy="1.2em">Value: '.btcFormat($txns[$main_txn]->value).'</tspan></text></a>';
+$cur_x += $rs['width']+50;
+$cur_y = ($max_height-txnHeight($main_txn))/2;
+$rs = drawTxn($cur_x, $cur_y, $main_txn);
+$svg .= $rs['svg'];
 
+$svg .= drawInputs($main_txn); // Draw connections to main transaction inputs
+
+// Draw connections to grandchildren
+foreach($tree[1] as $id) {
+	$svg .= drawInputs($id);
+}
+
+
+
+foreach($address_boxes as $box) {
+	$svg .= '<a xlink:href="http://blockchain.info/address/'.$box['addr'].'" target="_blank"><rect id="addr-'.$box['addr'].'" class="address" x="'.$box['x'].'" y="'.$box['y'].'" width="'.$box['width'].'" height="'.$box['height'].'" />'.
+		'<text x="'.($box['x']+5).'" y="'.($box['y']+15).'"><tspan class="address">'.truncateAddress($box['addr']).'</tspan><tspan x="'.($box['x']+5).'" dy="1.2em"><tspan class="field-label">Value:</tspan> '.btcFormat($box['value']).'</tspan></text></a>';
+};
+foreach($txn_boxes as $box) {
+	$svg .= '<a xlink:href="?txn='.$box['tx_index'].'" target="_blank"><rect id="txn-'.$box['tx_index'].'" class="transaction" x="'.$box['x'].'" y="'.$box['y'].'" width="'.$box['width'].'" height="'.$box['height'].'" />'.
+		'<text x="'.($box['x']+5).'" y="'.($box['y']+15).'"><tspan><tspan class="field-label">Transaction:</tspan> '.$box['tx_index'].'</tspan><tspan x="'.($box['x']+5).'" dy="1.2em"><tspan class="field-label">Value:</tspan> '.btcFormat($box['value']).'</tspan></text></a>';
+	
+}
 
 $svg .= "</svg>";
 echo $svg;
@@ -139,23 +147,102 @@ echo "</pre>";
 
 
 function btcFormat($satoshis) {
-	return $satoshis/100000000;
+	return bcdiv($satoshis, 100000000, 8);
 }
 function truncateAddress($address) {
+	return $address;
 	return substr($address, 0, 8).'...'.substr($address, -3);
 }
 function jsonGet($uri) {
 	$rs = file_get_contents($uri);
 	return json_decode($rs);
 }
-function drawFlow($x1, $y1, $w1, $x2, $y2, $w2) {
+function drawFlow($x1, $y1, $h1, $x2, $y2, $h2) {
 	$handle_size = 30;
 	$actions = array(
 		'M'.$x1.' '.$y1,
-		'C'.$x1.' '.($y1+$handle_size).' '.$x2.' '.($y2-$handle_size).' '.$x2.' '.$y2,
-		'L'.($x2+$w2).' '.$y2,
-		'C'.($x2+$w2).' '.($y2-$handle_size).' '.($x1+$w1).' '.($y1+$handle_size).' '.($x1+$w1).' '.$y1,
+		'C'.($x1+$handle_size).' '.$y1.' '.($x2-$handle_size).' '.$y2.' '.$x2.' '.$y2,
+		'L'.$x2.' '.($y2+$h2),
+		'C'.($x2-$handle_size).' '.($y2+$h2).' '.($x1+$handle_size).' '.($y1+$h1).' '.$x1.' '.($y1+$h1),
 		'Z',
 	);
 	return implode($actions);
+}
+
+function getTxn($tx_id) {
+	global $txns;
+	if (isset($txns[$tx_id])) return;
+	$txns[$tx_id] = jsonGet('http://blockchain.info/rawtx/'.$tx_id);
+	// Add value
+	$total = 0;
+	foreach($txns[$tx_id]->inputs as $in) {
+		$total += $in->prev_out->value;
+	}
+	$txns[$tx_id]->value = $total;
+}
+
+function txnHeight($tx_id) {
+	global $txns, $ratio, $min_box_height, $gap_size;
+	$txn = $txns[$tx_id];
+	$total_height = 0;
+	foreach($txn->out as $out) {
+		$height = $out->value*$ratio;
+		if ($height < $min_box_height) $height = $min_box_height;
+		$total_height += $height + $gap_size;
+	}
+	return $total_height-$gap_size;
+}
+
+function drawInputs($tx_id) {
+	global $address_boxes, $txn_boxes, $txns;
+	$txn = $txns[$tx_id];
+	foreach($txn_boxes as $tx_box) {
+		if ($tx_box['tx_index'] == $tx_id) break;
+	}
+	$txn_ratio = $tx_box['height']/$txn->value; // pixels per satoshi
+	$cur_x = $tx_box['x'];
+	$cur_y = $tx_box['y'];
+	$out = '';
+	foreach($txn->inputs as $in) {
+		$height = $in->prev_out->value*$txn_ratio;
+		foreach($address_boxes as $box) {
+			if ($box['addr'] == $in->prev_out->addr && $box['tx_index'] == $in->prev_out->tx_index) {
+				$out .= '<path class="input" d="'.drawFlow($box['x']+$box['width'], $box['y'], $box['height'], $cur_x, $cur_y, $height).'" />';
+				$cur_y += $height;
+				break;
+			}
+		}
+	}
+	return $out;
+}
+
+function drawTxn($x, $y, $tx_id) {
+	global $txns, $address_boxes, $txn_boxes, $ratio, $txn_box_width, $addr_box_width, $min_box_height, $gutter_width, $gap_size;
+	$txn = $txns[$tx_id];
+	
+	// Calculate total height
+	$total_height = txnHeight($tx_id);
+	$txn_height = $txn->value*$ratio;
+	if ($txn_height < $min_box_height) $txn_height = $min_box_height;
+	$txn_yOff = $y+($total_height-$txn_height)/2;
+	
+	$txn_ratio = $txn_height/$txn->value; // pixels per satoshi
+	
+	$tx_off = $txn_yOff;
+	$addr_off = $y;
+	$paths = array();
+	foreach($txn->out as $out) {
+		$real_height = $out->value*$ratio;
+		$height = ($real_height < $min_box_height)? $min_box_height : $real_height;
+		$real_height = $out->value*$txn_ratio;
+		$paths[] = '<path class="output" d="'.drawFlow($x+$txn_box_width, $tx_off, $real_height, $x+$txn_box_width+$gutter_width, $addr_off, $height).'" />';
+		$box_data = array('tx_index' => $tx_id, 'addr' => $out->addr, 'value' => $out->value, 'x' => $x+$txn_box_width+$gutter_width, 'y' => $addr_off, 'width' => $addr_box_width, 'height' => $height);
+		$address_boxes[] = $box_data;
+		$addr_off += $height + $gap_size;
+		$tx_off += $real_height;
+	}
+	$txn_boxes[] = array('x' => $x, 'y' => $txn_yOff, 'width' => $txn_box_width, 'height' => $txn_height, 'tx_index' => $tx_id, 'value' => $txn->value);
+	
+	$total_width = $txn_box_width+$gutter_width+$addr_box_width;
+	return array('svg' => '<g id="txn-'.$tx_id.'">'.implode($paths).'<rect class="txn_bb" x="'.$x.'" y="'.$y.'" width="'.$total_width.'" height="'.$total_height.'" /></g>', 'width' => $total_width, 'height' => $total_height);
 }
