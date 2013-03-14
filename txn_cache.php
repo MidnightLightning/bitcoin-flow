@@ -18,7 +18,11 @@ $stmt = $db->prepare('INSERT INTO "transactions" ("tx_in", "in_addr", "tx_spend"
 while (true) {
 	echo "Block {$block_index}...\n";
 	$json = get_json('http://blockchain.info/rawblock/'.$block_index);
-	if ($json === false) break;
+	if ($json === false) { // Block not found
+		$block_index++;
+		continue;
+	}
+	if ($json === null) exit;
 	foreach($json->tx as $tx) {
 		//print_r($tx);
 		foreach($tx->inputs as $in) {
@@ -38,5 +42,10 @@ while (true) {
 
 function get_json($uri) {
 	$rs = file_get_contents($uri);
+	if (strpos($rs, '<html>') !== false) return false;
+	if ($rs === false) {
+		echo "$uri\n";
+		exit;
+	}
 	return json_decode($rs);
 }
