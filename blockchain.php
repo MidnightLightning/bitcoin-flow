@@ -17,6 +17,9 @@
 // @TODO: identify "change" outputs (outputs going to an address that is among the inputs of the transaction) and draw them differently. Will probably require sorting those to the top or bottom of the list of outputs.
 // @TODO: Add javascript interaction such that rolling over an address box highlights other instances of the same address on the image.
 
+// Database setup
+$db = new PDO("mysql:host={$_SERVER['DB1_HOST']};port={$_SERVER['DB1_PORT']};dbname={$_SERVER['DB1_NAME']}", $_SERVER['DB1_USER'], $_SERVER['DB1_PASS']);
+
 if (isset($_GET['txn'])) {
 	if (intval($_GET['txn']) !== $_GET['txn']) {
 		// Transaction identified by hash?
@@ -35,7 +38,7 @@ if (isset($_GET['txn'])) {
 $generations = (isset($_GET['g']))? intval($_GET['g']) : 3;
 if ($generations > 5) $generations = 5;
 
-$txn = new btc_txn($main_txn, $generations);
+$txn = new btc_txn($main_txn, $generations, $db);
 $txn->prune = (isset($_GET['prune']))? true : false;
 $svg = $txn->toSVG();
 echo "<div id=\"svg-box\">{$svg}</div>";
@@ -60,6 +63,7 @@ $(document).ready(function() {
 
 <?php
 class btc_txn {
+	private $db;
 	private $txns = array();
 	private $txn_tree = array();
 	private $addr_boxes = array(); // Plot locations of each Address box on the image
@@ -76,7 +80,8 @@ class btc_txn {
 	public $gap_size = 10; // Vertical gap between address boxes
 	public $tx_gap_size = 20; // Vertical gap between transactions in a generation
 	
-	function __construct($txn_id, $generations) {
+	function __construct($txn_id, $generations, PDO $db) {
+		$this->db = $db;
 		while (count($this->txn_tree) < $generations) {
 			$this->txn_tree[] = array();
 		}
@@ -230,15 +235,16 @@ class btc_txn {
 		if (isset($this->txns[$id])) return $this->txns[$id];
 		
 		// Look for cached version
-		$cache_folder = './cached/';
-		$cache_file = $cache_folder.$id;
-		if (file_exists($cache_file)) {
-			//echo "{$id} is cached<br />\n";
-			$json = json_decode(file_get_contents($cache_file));
-			$this->txns[$id] = $json; // Save in memory
+		$stmt = $this->db->prepare('SELECT * FROM `txn` WHERE `index`=:index');
+		$stmt->bindValue(':index', $id);
+		$rs = $stmt->fetch(PDO::FETCH_ASSOC);
+		$cache_time = 60*60*24*90; // 90 days
+		if ($rs != false && time()-$rs['cache_time'] < $cache_time) {
+			// There is a cache
+			$json = json_decode($rs['data']);
+			$this->txns[$id] = $json;
 			return $json;
 		}
-		//echo "{$id} is not cached<br />\n";
 		
 		// Otherwise have to build the cache
 		$json = $this->_jsonGet('http://blockchain.info/rawtx/'.$id);
@@ -266,7 +272,13 @@ class btc_txn {
 		}
 		$json->fee = $json->value-$total;
 		
-		file_put_contents($cache_file, json_encode($json)); // Save cache
+		// Save the cache
+		$stmt = $this->db->prepare('INSERT OR UPDATE INTO `txn` (`index`, `hash`, `cache_time`, `data`) VALUES (:index, :hash, NOW(), :data)');
+		$stmt->bindValue(':index', $json->tx_index);
+		$stmt->bindValue(':hash', $json->hash);
+		$stmt->bindValue(':data', json_encode($json));
+		$stmt->execute();
+		
 		$this->txns[$id] = $json; // Save in memory
 		return $json;
 	}

@@ -1,0 +1,6 @@
+web1:
+    php_extensions:
+        - curl
+        - pdo
+        - pdo_mysql
+        - bcmath
