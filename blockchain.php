@@ -235,11 +235,12 @@ class btc_txn {
 		if (isset($this->txns[$id])) return $this->txns[$id];
 		
 		// Look for cached version
-		$stmt = $this->db->prepare('SELECT * FROM `txn` WHERE `index`=:index');
-		$stmt->bindValue(':index', $id);
+		$stmt = $this->db->prepare('SELECT *, UNIX_TIMESTAMP(`cache_time`) AS "cache_timestamp" FROM `txn` WHERE `index`=:id OR `hash`=:id');
+		$stmt->bindValue(':id', $id);
+		$stmt->execute();
 		$rs = $stmt->fetch(PDO::FETCH_ASSOC);
 		$cache_time = 60*60*24*90; // 90 days
-		if ($rs != false && time()-$rs['cache_time'] < $cache_time) {
+		if ($rs != false && time()-$rs['cache_timestamp'] < $cache_time) {
 			// There is a cache
 			$json = json_decode($rs['data']);
 			$this->txns[$id] = $json;
@@ -273,7 +274,7 @@ class btc_txn {
 		$json->fee = $json->value-$total;
 		
 		// Save the cache
-		$stmt = $this->db->prepare('INSERT OR UPDATE INTO `txn` (`index`, `hash`, `cache_time`, `data`) VALUES (:index, :hash, NOW(), :data)');
+		$stmt = $this->db->prepare('INSERT INTO `txn` (`index`, `hash`, `cache_time`, `data`) VALUES (:index, :hash, NOW(), :data) ON DUPLICATE KEY UPDATE `data`=:data, `cache_time`=NOW()');
 		$stmt->bindValue(':index', $json->tx_index);
 		$stmt->bindValue(':hash', $json->hash);
 		$stmt->bindValue(':data', json_encode($json));
