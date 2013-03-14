@@ -17,7 +17,21 @@
 // @TODO: identify "change" outputs (outputs going to an address that is among the inputs of the transaction) and draw them differently. Will probably require sorting those to the top or bottom of the list of outputs.
 // @TODO: Add javascript interaction such that rolling over an address box highlights other instances of the same address on the image.
 
-$main_txn = (isset($_GET['txn']))? intval($_GET['txn']) : '56619498';
+if (isset($_GET['txn'])) {
+	if (intval($_GET['txn']) !== $_GET['txn']) {
+		// Transaction identified by hash?
+		$rs = json_decode(file_get_contents('http://blockchain.info/rawtx/'.$_GET['txn']));
+		if ($rs) {
+			$main_txn = $rs->tx_index;
+		} else {
+			exit("Can't find that transaction...");
+		}
+	} else {
+		$main_txn = $_GET['txn'];
+	}
+} else {
+	$main_txn = '56619498';
+}
 $generations = (isset($_GET['g']))? intval($_GET['g']) : 3;
 if ($generations > 5) $generations = 5;
 
