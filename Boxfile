@@ -1,6 +1,6 @@
 web1:
-    php_extensions:
-        - curl
-        - pdo
-        - pdo_mysql
-        - bcmath
+  php_extensions: [curl, pdo, pdo_mysql, bcmath]
+  after_build:
+    - "mv config.pg.php config.php" # Pagodabox-specific config files
+    - "if [ ! -f composer.phar ]; then curl -s http://getcomposer.org/installer | php; fi; php composer.phar install" # Use PHP Composer for dependencies
+    
