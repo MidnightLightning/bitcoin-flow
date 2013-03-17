@@ -25,7 +25,14 @@ class TxnTree {
 		while (count($this->txn_tree) < $generations) {
 			$this->txn_tree[] = array();
 		}
-		$this->_buildTree($txn_id, 0);
+		$this->_buildTree($txn_id, 0, $generations);
+		
+		// Traverse the transactions and sort into generations
+		foreach($this->txns as $txn) {
+			if (isset($txn->level) && $txn->level < $generations) {
+				$this->txn_tree[$txn->level][] = $txn->tx_index;
+			}
+		}
 		$this->txn_tree = array_reverse($this->txn_tree);
 		//var_dump($this->txn_tree);
 		
@@ -35,16 +42,18 @@ class TxnTree {
 				$txn = $this->getTxn($id);
 				foreach($txn->out as $out) {
 					if ($i+1 == count($this->txn_tree)) {
-						$out->spent = true;
+						$out->spent = true; // Root transaction outs are automatically kept
 					} else {
 						$found = false;
-						foreach($this->txn_tree[$i+1] as $search_id) {
-							$search_tx = $this->getTxn($search_id);
-							if (!isset($search_tx->inputs[0]->prev_out)) continue;
-							foreach($search_tx->inputs as $in) {
-								if ($in->prev_out->tx_index == $txn->tx_index && $in->prev_out->addr == $out->addr) {
-									$found = true;
-									break 2;
+						for ($j = $i+1; $j<count($this->txn_tree); $j++) {
+							foreach($this->txn_tree[$j] as $search_id) {
+								$search_tx = $this->getTxn($search_id);
+								if (!isset($search_tx->inputs[0]->prev_out)) continue;
+								foreach($search_tx->inputs as $in) {
+									if ($in->prev_out->tx_index == $txn->tx_index && $in->prev_out->addr == $out->addr) {
+										$found = true;
+										break 3;
+									}
 								}
 							}
 						}
@@ -224,15 +233,23 @@ class TxnTree {
 		return $json;
 	}
 	
-	private function _buildTree($id, $level) {
-		if ($level >= count($this->txn_tree)) return;
+	private function _buildTree($id, $level, $max_generations) {
 		$txn = $this->getTxn($id);
-		$this->txn_tree[$level][] = $id;
-		$this->txn_tree[$level] = array_unique($this->txn_tree[$level]);
-		if (isset($txn->inputs[0]->prev_out)) {
-			foreach($txn->inputs as $in) {
-				$this->_buildTree($in->prev_out->tx_index, $level+1);
-			}
+		if (isset($txn->level)) { // Transaction already exists; update all children to new generation
+			$max_generations = false;  // Adjust max, so it propgates through
+		} elseif ($max_generations === false) {
+			// Transaction doesn't exist, and we were in the middle propgating a change, so stop now
+			unset($this->txns[$id]);
+			return;
+		}
+		$txn->level = $level;
+		if ($max_generations !== false && $level+1 >= $max_generations) {
+			return;
+		}
+		if (!isset($txn->inputs[0]->prev_out)) return;
+		
+		foreach($txn->inputs as $in) {
+			$this->_buildTree($in->prev_out->tx_index, $level+1, $max_generations);
 		}
 	}
 	
@@ -279,12 +296,20 @@ class TxnTree {
 	}
 	
 	private function _drawFlow(Point $p1, $h1, Point $p2, $h2) {
-		$handle_size = ($p2->x - $p1->x)*0.4;
-		return 'M'.$p1->x.' '.$p1->y.
-		  'C'.($p1->x+$handle_size).' '.$p1->y.' '.($p2->x-$handle_size).' '.$p2->y.' '.$p2->x.' '.$p2->y.
-		  'L'.$p2->x.' '.($p2->y+$h2).
-		  'C'.($p2->x-$handle_size).' '.($p2->y+$h2).' '.($p1->x+$handle_size).' '.($p1->y+$h1).' '.$p1->x.' '.($p1->y+$h1).
-		  'Z';
+		$handle_size = $this->gutter_width*0.6;
+		$handle_left = $p2->x - $this->gutter_width + $handle_size;
+		$handle_right = $p2->x - $handle_size;
+		$out = 'M'.$p1->x.' '.$p1->y;
+		if ($p2->x - $p1->x > $this->gutter_width) {
+			$out .= 'L'.($p2->x-$this->gutter_width).' '.$p1->y;
+		}
+		$out .= 'C'.$handle_left.' '.$p1->y.' '.$handle_right.' '.$p2->y.' '.$p2->x.' '.$p2->y;
+		$out .= 'L'.$p2->x.' '.($p2->y+$h2);
+		$out .= 'C'.$handle_right.' '.($p2->y+$h2).' '.$handle_left.' '.($p1->y+$h1).' '.($p2->x-$this->gutter_width).' '.($p1->y+$h1);
+		if ($p2->x - $p1->x > $this->gutter_width) {
+			$out .= 'L'.$p1->x.' '.($p1->y+$h1);
+		}
+		return $out.'Z';
 	}
 	
 	private function _drawInputs($tx_id, $generation) {
@@ -299,7 +324,7 @@ class TxnTree {
 			if (!isset($in->prev_out)) continue;
 			$height = $in->prev_out->value*$txn_ratio;
 			foreach($this->addr_boxes as $box) {
-				if ($box['addr'] == $in->prev_out->addr && $box['tx_index'] == $in->prev_out->tx_index && $box['generation'] == $generation-1) {
+				if ($box['addr'] == $in->prev_out->addr && $box['tx_index'] == $in->prev_out->tx_index) {
 					$paths[] = '<path class="input" d="'.$this->_drawFlow(new Point($box['pos']->x+$box['width'], $box['pos']->y), $box['height'], $cur_tx, $height).'" />';
 					break;
 				}
