@@ -17,7 +17,7 @@ class TxnTree {
 	public $min_box_height = 35; // Minimum box height (2 rows of text)
 	public $max_txn_height = 300; // Largest size a Transaction box can be; sets the ratio of the image overall, where the largest-value transaction displayed is this height
 	public $gutter_width = 40; // Horizontal space between transaction box and address boxes
-	public $gap_size = 10; // Vertical gap between address boxes
+	public $gap_size = 5; // Vertical gap between address boxes
 	public $tx_gap_size = 20; // Vertical gap between transactions in a generation
 	
 	function __construct($txn_id, $generations, PDO $db) {
@@ -82,7 +82,7 @@ class TxnTree {
 		$svg .= 'text { font-size:12px; font-family:"Gil Sans",sans-serif; }';
 		$svg .= 'tspan.field-label { font-weight:bold; }';
 		$svg .= 'tspan.address { font-size:10px; font-family:monospace; }';
-		$svg .= 'path.input { fill:#AFA; stroke:#3F3; stroke-width:1px; opacity:0.6; }';
+		$svg .= 'path.input { fill:#AFA; stroke:#3C3; stroke-width:1px; opacity:0.6; }';
 		$svg .= 'path.output { fill:#FAA; stroke:#F33; stroke-width:1px; opacity:0.6; }';
 		$svg .= 'path.fee { fill:#AAA; stroke:#333; stroke-width:1px; }';
 		$svg .= 'path.line { fill:transparent; }';
@@ -228,6 +228,10 @@ class TxnTree {
 		$stmt->bindValue(':hash', $json->hash);
 		$stmt->bindValue(':data', json_encode($json));
 		$stmt->execute();
+		if ($stmt->errorCode() != '00000') {
+			print_r($stmt->errorInfo());
+			exit;
+		}
 		
 		$this->txns[$id] = $json; // Save in memory
 		return $json;
