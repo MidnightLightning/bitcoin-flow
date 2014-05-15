@@ -10,6 +10,10 @@
 // Transaction 57326023 and its ancestors are a good example of multiple inputs coming from one prior transaction:
 //    Three of transaction 57326023's inputs came from transaction 57315077, which pulled three outputs from 57303263.
 //    Both of transaction 57303591's outputs make their way into 57326023 (one via 57306406 and one via 57315077)
+// Transacction 61980201 is the payout of a SatoshiDice "less than 1" winner (http://satoshidice.com/full.php?tx=d602ad09f967f11d50fcb2f98df8d001a812ce4965d6e69340f8961aeb32f27c)
+//    Shows 1920.00 BTC being collected into one output. The owner then split the profits several ways in successive transactions. (i.e. 61974097 is grandchild to that transaction)
+//    ?txn=61980201&g=2
+//    Most of the inputs appear to be from SatoshiDice "hot" accounts (directly linking to a SD profit taken from a losing bet), but there's 6 inputs all from the same transaction (?txn=61976940&prune&g=2) that appear to be a "colder" storage of SD. Address 1znAP17iQ8FZaWRH2RB1ktsYASokLDnD8 appears to be a "holding area" for SD funds; it gets filled up, and when it hits ~2,500 BTC, it gets split into 25 new addresses equally (each gets ~100 BTC).
 
 // @TODO: when pruning outputs, don't prune outputs that go to an address that is unpruned somewhere else
 // @TODO: allow whitelisting addresses to never get pruned
