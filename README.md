@@ -5,5 +5,5 @@ This PHP script generates an SVG graph of [Bitcoins](http://www.weusecoins.com/)
 ```
 docker run --rm --name composer -v "$PWD":/app -w /app composer/composer update
 docker build -t bitcoin-flow .
-docker run -d --name bitcoin-flow -p 8081:80 bitcoin-flow
+docker run -d --name bitcoin-flow -v "$PWD":/var/www/html/ -p 8081:80 bitcoin-flow
 ```

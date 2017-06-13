@@ -11,7 +11,7 @@ class TxnTree {
 	private $txn_boxes = array(); // Plot locations of each Transaction box on the image
 	private $txn_bboxes = array(); // Plot locations of the bounding box of each transaction
 	public $ratio = false;
-	public $prune = false; // Remove transaction outputs that aren't re-spent in the tree? 
+	public $prune = false; // Remove transaction outputs that aren't re-spent in the tree?
 	public $txn_box_width = 140; // Width of the Transaction boxes
 	public $addr_box_width = 225; // Width of the Address boxes
 	public $min_box_height = 35; // Minimum box height (2 rows of text)
@@ -19,14 +19,14 @@ class TxnTree {
 	public $gutter_width = 40; // Horizontal space between transaction box and address boxes
 	public $gap_size = 5; // Vertical gap between address boxes
 	public $tx_gap_size = 20; // Vertical gap between transactions in a generation
-	
+
 	function __construct($txn_id, $generations, PDO $db) {
 		$this->db = $db;
 		while (count($this->txn_tree) < $generations) {
 			$this->txn_tree[] = array();
 		}
 		$this->_buildTree($txn_id, 0, $generations);
-		
+
 		// Traverse the transactions and sort into generations
 		foreach($this->txns as $txn) {
 			if (isset($txn->level) && $txn->level < $generations) {
@@ -35,7 +35,7 @@ class TxnTree {
 		}
 		$this->txn_tree = array_reverse($this->txn_tree);
 		//var_dump($this->txn_tree);
-		
+
 		// Flag outputs that aren't critical
 		foreach($this->txn_tree as $i => $generation) {
 			foreach($generation as $id) {
@@ -63,7 +63,7 @@ class TxnTree {
 			}
 		}
 	}
-	
+
 	function toSVG() {
 		// Calculate max value
 		$max = 0;
@@ -71,7 +71,7 @@ class TxnTree {
 			if ($tx->value > $max) $max = $tx->value;
 		}
 		$this->ratio = $this->max_txn_height/$max; // Pixels per Satoshi
-		
+
 		$svg = '';
 		$svg .= '<defs><style type="text/css"><![CDATA[';
 		$svg .= 'rect { fill:#E0E0E0; stroke:#333; stroke-width:2px; }';
@@ -96,12 +96,12 @@ class TxnTree {
 		$svg .= '<mask id="fade_right_svg_mask" maskUnits="objectBoundingBox" maskContentUnits="objectBoundingBox">';
 		$svg .= '<rect x="0" y="0" width="1" height="1" style="stroke-width:0; fill: url(#fade_right_svg_gradient);" />';
 		$svg .= '</mask>';
-		
+
 		/*
 		$svg .= '<rect x="'.($total_width-100).'" y="0" width="100" height="100" style="stroke-width:0; fill:black" />';
 		$svg .= '<rect x="'.($total_width-100).'" y="0" width="100" height="100" style="stroke-width:0; fill:url(#fade_right_svg_gradient);" />';
 		*/
-		
+
 		$cur = new Point(5, 5);
 		$max_height = 0;
 		for($i=0; $i<count($this->txn_tree); $i++) {
@@ -144,25 +144,25 @@ class TxnTree {
 			$cur->y = 5;
 			$cur->x += $this->txn_box_width+$this->gutter_width+$this->addr_box_width+$this->gutter_width;
 		}
-		
+
 		$total_width = $cur->x - $this->gutter_width;
 		$max_height -= $this->tx_gap_size;
 		$svg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="'.($total_width+10).'" height="'.($max_height+10).'">' . $svg;
-		
-		
+
+
 		// Now draw input connections
 		for ($i=1; $i<count($this->txn_tree); $i++) {
 			foreach($this->txn_tree[$i] as $id) {
 				$svg .= $this->_drawInputs($id, $i);
 			}
 		}
-		
+
 		// Draw Address boxes
 		foreach($this->addr_boxes as $box) {
 			$svg .= '<a xlink:href="http://blockchain.info/address/'.$box['addr'].'" target="_blank"><rect id="addr-'.$box['addr'].'" class="address" x="'.$box['pos']->x.'" y="'.$box['pos']->y.'" width="'.$box['width'].'" height="'.$box['height'].'" />'.
 				'<text x="'.($box['pos']->x+5).'" y="'.($box['pos']->y+15).'"><tspan class="address">'.$box['addr'].'</tspan><tspan x="'.($box['pos']->x+5).'" dy="1.2em"><tspan class="field-label">Value:</tspan> '.$this->_btcFormat($box['value']).'</tspan></text></a>';
 		}
-		
+
 		// Draw Fee boxes
 		foreach($this->fee_boxes as $box) {
 			$svg .= '<rect id="fee-'.$box['tx_index'].'" class="fee" x="'.$box['pos']->x.'" y="'.$box['pos']->y.'" width="'.$box['width'].'" height="'.$box['height'].'" />'.
@@ -175,16 +175,16 @@ class TxnTree {
 			$svg .= '" x="'.$box['pos']->x.'" y="'.$box['pos']->y.'" width="'.$box['width'].'" height="'.$box['height'].'" />'.
 				'<text x="'.($box['pos']->x+5).'" y="'.($box['pos']->y+15).'"><tspan><tspan class="field-label">Transaction:</tspan> '.$box['tx_index'].'</tspan><tspan x="'.($box['pos']->x+5).'" dy="1.2em"><tspan class="field-label">Value:</tspan> '.$this->_btcFormat($box['value']).'</tspan></text></a>';
 		}
-		
+
 		$svg .= '</svg>';
 		return $svg;
 	}
-	
+
 	function getTxn($id) {
 		if (isset($this->txns[$id])) return $this->txns[$id];
-		
+
 		// Look for cached version
-		$stmt = $this->db->prepare('SELECT *, UNIX_TIMESTAMP(`cache_time`) AS "cache_timestamp" FROM `txn` WHERE `index`=:id OR `hash`=:id');
+		$stmt = $this->db->prepare('SELECT *, cache_time AS "cache_timestamp" FROM `txn` WHERE `index`=:id OR `hash`=:id');
 		$stmt->bindValue(':id', $id);
 		$stmt->execute();
 		$rs = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -195,13 +195,13 @@ class TxnTree {
 			$this->txns[$id] = $json;
 			return $json;
 		}
-		
+
 		// Otherwise have to build the cache
 		$json = $this->_jsonGet('http://blockchain.info/rawtx/'.$id);
 		if ($json == '') exit("failed to get Transaction info for ".$id);
-		
+
 		$json->coinbase = (!isset($json->inputs[0]->prev_out))? true : false;
-		
+
 		// Calculate value
 		$total = 0;
 		if ($json->coinbase) {
@@ -214,29 +214,30 @@ class TxnTree {
 			}
 		}
 		$json->value = $total;
-		
+
 		// Calculate fee
 		$total = 0;
 		foreach($json->out as $out) {
 			$total += $out->value;
 		}
 		$json->fee = $json->value-$total;
-		
+
 		// Save the cache
-		$stmt = $this->db->prepare('INSERT INTO `txn` (`index`, `hash`, `cache_time`, `data`) VALUES (:index, :hash, NOW(), :data) ON DUPLICATE KEY UPDATE `data`=:data, `cache_time`=NOW()');
+		$stmt = $this->db->prepare('REPLACE INTO `txn` (`index`, `hash`, `cache_time`, `data`) VALUES (:index, :hash, :date, :data)');
 		$stmt->bindValue(':index', $json->tx_index);
 		$stmt->bindValue(':hash', $json->hash);
+		$stmt->bindValue(':date', date('U'));
 		$stmt->bindValue(':data', json_encode($json));
 		$stmt->execute();
 		if ($stmt->errorCode() != '00000') {
 			print_r($stmt->errorInfo());
 			exit;
 		}
-		
+
 		$this->txns[$id] = $json; // Save in memory
 		return $json;
 	}
-	
+
 	private function _buildTree($id, $level, $max_generations) {
 		$txn = $this->getTxn($id);
 		if (isset($txn->level)) { // Transaction already exists; update all children to new generation
@@ -251,12 +252,12 @@ class TxnTree {
 			return;
 		}
 		if (!isset($txn->inputs[0]->prev_out)) return;
-		
+
 		foreach($txn->inputs as $in) {
 			$this->_buildTree($in->prev_out->tx_index, $level+1, $max_generations);
 		}
 	}
-	
+
 	private function _jsonGet($uri) {
 		//return json_decode(file_get_contents($uri));
 		$ch = curl_init();
@@ -265,7 +266,7 @@ class TxnTree {
 		curl_setopt($ch, CURLOPT_COOKIE, 'show_adv=true');
 		return json_decode(curl_exec($ch));
 	}
-	
+
 	private function _txnHeight($id, $prune = false) {
 		if ($this->ratio === false) return false; // Need to set a ratio first
 		$txn = $this->getTxn($id);
@@ -292,13 +293,13 @@ class TxnTree {
 		}
 		return $total_height-$this->gap_size;
 	}
-	
+
 	private function _drawCurve(Point $p1, Point $p2) {
 		$handle_size = ($p2->x - $p1->x)*0.4;
 		return 'M'.$p1->x.' '.$p1->y.
 		  'C'.($p1->x+$handle_size).' '.$p1->y.' '.($p2->x-$handle_size).' '.$p2->y.' '.$p2->x.' '.$p2->y;
 	}
-	
+
 	private function _drawFlow(Point $p1, $h1, Point $p2, $h2) {
 		$handle_size = $this->gutter_width*0.6;
 		$handle_left = $p2->x - $this->gutter_width + $handle_size;
@@ -315,7 +316,7 @@ class TxnTree {
 		}
 		return $out.'Z';
 	}
-	
+
 	private function _drawInputs($tx_id, $generation) {
 		$txn = $this->getTxn($tx_id);
 		foreach($this->txn_boxes as $tx_box) {
@@ -337,18 +338,18 @@ class TxnTree {
 		}
 		return implode('', $paths);
 	}
-	
+
 	private function _drawTxn(Point &$cur, $tx_id, $generation, $prune = false) {
 		$txn = $this->getTxn($tx_id);
 		$total_height = $this->_txnHeight($tx_id, $prune); // Height of the outputs
-		
+
 		$txn_height = max($txn->value*$this->ratio, $this->min_box_height);
 		$txn_ratio = $txn_height/$txn->value; // Pixels per Satoshi
-		
+
 		$cur_tx = new Point($cur->x+$this->txn_box_width, $cur->y + ($total_height-$txn_height)/2);
 		$cur_addr = new Point($cur->x+$this->txn_box_width+$this->gutter_width, $cur->y);
 		$this->txn_boxes[] = array('tx_index' => $tx_id, 'generation' => $generation, 'value' => $txn->value, 'fee' => $txn->fee, 'coinbase' => $txn->coinbase, 'width' => $this->txn_box_width, 'height' => $txn_height, 'pos' => new Point($cur->x, $cur->y + ($total_height-$txn_height)/2));
-		
+
 		$paths = array();
 		$last_tx_spent = true;
 		$last_line_height = 0;
@@ -367,18 +368,18 @@ class TxnTree {
 				} else {
 					$paths[] = '<path class="output unspent" d="'.$this->_drawFlow($cur_tx, $real_height, $cur_addr, $visual_height).'" />';
 				}
-				
+
 				$cur_addr->y += $visual_height + $this->gap_size;
 				$cur_tx->y += $real_height;
 			} else {
 				// Show full display
 				$real_height = $out->value*$txn_ratio; // What fraction of the transaction's height is this output?
 				$visual_height = max($out->value*$this->ratio, $this->min_box_height);
-			
+
 				$paths[] = '<path class="output" d="'.$this->_drawFlow($cur_tx, $real_height, $cur_addr, $visual_height).'" />';
 				$box_data = array('tx_index' => $tx_id, 'generation' => $generation, 'addr' => $out->addr, 'value' => $out->value, 'pos' => clone $cur_addr, 'width' => $this->addr_box_width, 'height' => $visual_height);
 				$this->addr_boxes[] = $box_data;
-				
+
 				$cur_addr->y += $visual_height + $this->gap_size;
 				$cur_tx->y += $real_height;
 			}
@@ -395,19 +396,19 @@ class TxnTree {
 				$visual_height = max($txn->fee*$this->ratio, $this->min_box_height);
 				$paths[] = '<path class="fee" d="'.$this->_drawFlow($cur_tx, $real_height, $cur_addr, $visual_height).'" />';
 				$this->fee_boxes[] = array('tx_index' => $tx_id, 'value' => $txn->fee, 'pos' => clone $cur_addr, 'width' => $this->addr_box_width, 'height' => $visual_height);
-				
+
 				$cur_tx->y += $visual_height;
 			}
 			$cur_addr->y += $real_height + $this->gap_size;
 		}
-		
+
 		$total_width = $this->txn_box_width+$this->gutter_width+$this->addr_box_width;
 		$this->txn_bboxes[] = array('tx_id' => $tx_id, 'pos' => clone $cur, 'width' => $total_width, 'height' => $total_height);
 		$svg = '<g id="txn-'.$tx_id.'">'.implode($paths).'<rect class="txn_bb" x="'.$cur->x.'" y="'.$cur->y.'" width="'.$total_width.'" height="'.$total_height.'" /></g>';
 		$cur->y += $total_height + $this->tx_gap_size; // Update current position
 		return $svg;
 	}
-	
+
 	/**
 	 * Take a raw number of satoshis and present it as full bitcoins
 	 *

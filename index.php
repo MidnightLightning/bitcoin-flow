@@ -21,6 +21,7 @@
 // @TODO: identify "change" outputs (outputs going to an address that is among the inputs of the transaction) and draw them differently. Will probably require sorting those to the top or bottom of the list of outputs.
 // @TODO: Add javascript interaction such that rolling over an address box highlights other instances of the same address on the image.
 
+date_default_timezone_set('America/Chicago');
 require 'vendor/autoload.php';
 require 'config.php';
 
